@@ -18,12 +18,14 @@ package requester
 import (
 	"bytes"
 	"crypto/tls"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -45,6 +47,7 @@ type result struct {
 	resDuration   time.Duration // response "read" duration
 	delayDuration time.Duration // delay between response and request
 	contentLength int64
+	rawResponse   string
 }
 
 type Work struct {
@@ -150,6 +153,7 @@ func (b *Work) makeRequest(c *http.Client) {
 	var code int
 	var dnsStart, connStart, resStart, reqStart, delayStart time.Duration
 	var dnsDuration, connDuration, resDuration, reqDuration, delayDuration time.Duration
+	var rawResponse string
 	var req *http.Request
 	if b.RequestFunc != nil {
 		req = b.RequestFunc()
@@ -181,12 +185,22 @@ func (b *Work) makeRequest(c *http.Client) {
 			resStart = now()
 		},
 	}
+	fmt.Println(req.Header.Get("Cookie"))
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 	resp, err := c.Do(req)
 	if err == nil {
 		size = resp.ContentLength
 		code = resp.StatusCode
-		io.Copy(ioutil.Discard, resp.Body)
+		// io.Copy(ioutil.Discard, resp.Body)
+
+		buffer := new(strings.Builder)
+		io.Copy(buffer, resp.Body)
+		rawResponse = buffer.String()
+
+		fmt.Println("====================================")
+		fmt.Println(rawResponse)
+		fmt.Println("====================================")
+
 		resp.Body.Close()
 	}
 	t := now()
@@ -203,6 +217,7 @@ func (b *Work) makeRequest(c *http.Client) {
 		reqDuration:   reqDuration,
 		resDuration:   resDuration,
 		delayDuration: delayDuration,
+		rawResponse:   rawResponse,
 	}
 }
 
